@@ -42,16 +42,21 @@ export const metadata: Metadata = {
     icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
     apple: '/icon.svg',
   },
+  metadataBase: new URL('https://scout-search-eight.vercel.app'),
   openGraph: {
     title: 'Scout — AI Search',
-    description: 'AI-powered search that answers first and cites its sources.',
+    description:
+      'AI-powered search that answers first, cites its sources, and saves what matters.',
     type: 'website',
     siteName: 'Scout',
+    url: 'https://scout-search-eight.vercel.app',
   },
   twitter: {
-    card: 'summary',
+    card: 'summary_large_image',
     title: 'Scout — AI Search',
-    description: 'AI-powered search that answers first and cites its sources.',
+    description:
+      'AI-powered search that answers first, cites its sources, and saves what matters.',
+    creator: '@scout',
   },
 }
 
