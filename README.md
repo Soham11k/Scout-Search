@@ -2,12 +2,17 @@
 
 > A quieter, smarter way to search the web. Scout answers your question first, shows its sources, and lets you save what matters.
 
+🌍 **Live at: [scout-search-eight.vercel.app](https://scout-search-eight.vercel.app)**
+
 Scout is an AI-first search engine built with Next.js. It combines real web search, OpenAI-powered synthesis, page summarization, and a calm editorial UI into a single, installable app.
 
-![editorial](https://img.shields.io/badge/design-editorial-8b6f47)
+![live](https://img.shields.io/badge/live-scout--search--eight.vercel.app-10a37f)
 ![next](https://img.shields.io/badge/Next.js-16-black)
-![ai](https://img.shields.io/badge/AI-OpenAI_GPT--4o-10a37f)
+![ai](https://img.shields.io/badge/AI-OpenAI-10a37f)
+![editorial](https://img.shields.io/badge/design-editorial-8b6f47)
 ![license](https://img.shields.io/badge/license-MIT-blue)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FSoham11k%2FScout-Search)
 
 ---
 
@@ -241,12 +246,26 @@ Never commit `.env`. Rotate any key that has been exposed in chat/screenshots.
 
 ## Deploying
 
-### Vercel (recommended)
+### Vercel (one click)
 
-1. Push to GitHub
-2. Import in Vercel
-3. Add all `.env` values in project settings → **Environment Variables**
-4. Deploy
+The live version at [scout-search-eight.vercel.app](https://scout-search-eight.vercel.app) is deployed to Vercel. To deploy your own:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FSoham11k%2FScout-Search)
+
+Or manually:
+
+1. Fork / clone this repo to your GitHub
+2. Sign into [vercel.com](https://vercel.com) with GitHub
+3. **Add New → Project** → pick your fork
+4. Expand **Environment Variables** → paste all values from your `.env`
+5. Click **Deploy** — you'll have a live URL in ~90 seconds
+
+### CLI deploys (subsequent changes)
+
+```bash
+npx vercel            # deploys a preview
+npx vercel --prod     # promotes to production
+```
 
 The `/app` route is dynamic; everything else is static. Middleware proxies to ensure the auth cookie is honored.
 
