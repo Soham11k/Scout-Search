@@ -26,6 +26,7 @@ type AuthContextValue = AuthState & {
     email: string
     password: string
   }) => Promise<void>
+  signInWithGoogle: (redirectTo?: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -281,9 +282,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState({ user: null, status: 'unauthenticated', mode: 'local' })
   }, [hasSupabase])
 
+  const signInWithGoogle = React.useCallback(
+    async (redirectTo?: string) => {
+      const supabase = getSupabaseBrowserClient()
+      if (!hasSupabase || !supabase) {
+        throw new Error(
+          'Google sign-in requires Supabase. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY, then configure the Google provider in your Supabase dashboard.',
+        )
+      }
+      const origin =
+        typeof window !== 'undefined' ? window.location.origin : ''
+      const callback = `${origin}/auth/callback${
+        redirectTo ? `?next=${encodeURIComponent(redirectTo)}` : ''
+      }`
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: callback },
+      })
+      if (error) throw new Error(error.message)
+    },
+    [hasSupabase],
+  )
+
   const value = React.useMemo<AuthContextValue>(
-    () => ({ ...state, signIn, signUp, signOut }),
-    [state, signIn, signUp, signOut],
+    () => ({ ...state, signIn, signUp, signInWithGoogle, signOut }),
+    [state, signIn, signUp, signInWithGoogle, signOut],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

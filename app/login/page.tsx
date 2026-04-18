@@ -19,12 +19,13 @@ function LoginInner() {
   const router = useRouter()
   const search = useSearchParams()
   const redirect = search.get('next') || '/app'
-  const { signIn, status } = useAuth()
+  const { signIn, signInWithGoogle, status, mode } = useAuth()
 
   const [email, setEmail] = React.useState('')
   const [password, setPassword] = React.useState('')
   const [error, setError] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(false)
+  const [googleLoading, setGoogleLoading] = React.useState(false)
 
   React.useEffect(() => {
     if (status === 'authenticated') router.replace(redirect)
@@ -109,15 +110,27 @@ function LoginInner() {
 
         <button
           type="button"
-          onClick={() =>
-            toast.message('SSO is on the roadmap', {
-              description: 'For now, create a local account — it takes 15 seconds.',
-            })
-          }
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors"
+          disabled={googleLoading}
+          onClick={async () => {
+            if (mode !== 'supabase') {
+              toast.message('Google sign-in needs Supabase configured', {
+                description:
+                  'Set NEXT_PUBLIC_SUPABASE_URL and the anon key, then enable Google in your Supabase dashboard.',
+              })
+              return
+            }
+            setGoogleLoading(true)
+            try {
+              await signInWithGoogle(redirect)
+            } catch (err) {
+              setGoogleLoading(false)
+              setError(err instanceof Error ? err.message : 'Google sign-in failed')
+            }
+          }}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium hover:bg-muted transition-colors disabled:opacity-60"
         >
           <GoogleMark />
-          Continue with Google
+          {googleLoading ? 'Redirecting to Google…' : 'Continue with Google'}
         </button>
       </form>
     </AuthShell>
