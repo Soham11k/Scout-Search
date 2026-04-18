@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono, Instrument_Serif } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
+import { PaletteProvider } from '@/lib/palette'
 import { Toaster } from '@/components/ui/sonner'
 import { AuthProvider } from '@/lib/auth'
 import './globals.css'
@@ -25,17 +26,32 @@ const serif = Instrument_Serif({
 })
 
 export const metadata: Metadata = {
-  title: 'Scout — A thoughtful place to search',
+  title: 'Scout — AI Search',
   description:
-    'A calm, quietly-powerful search companion. Save what matters, skim the noise, and find things you care about — faster.',
+    'AI-powered search that answers first, cites its sources, and saves what matters. For everyone.',
   generator: 'Scout',
+  applicationName: 'Scout',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Scout',
+  },
+  formatDetection: { telephone: false },
   icons: {
-    icon: [
-      { url: '/icon-light-32x32.png', media: '(prefers-color-scheme: light)' },
-      { url: '/icon-dark-32x32.png', media: '(prefers-color-scheme: dark)' },
-      { url: '/icon.svg', type: 'image/svg+xml' },
-    ],
-    apple: '/apple-icon.png',
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+    apple: '/icon.svg',
+  },
+  openGraph: {
+    title: 'Scout — AI Search',
+    description: 'AI-powered search that answers first and cites its sources.',
+    type: 'website',
+    siteName: 'Scout',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Scout — AI Search',
+    description: 'AI-powered search that answers first and cites its sources.',
   },
 }
 
@@ -44,6 +60,10 @@ export const viewport: Viewport = {
     { media: '(prefers-color-scheme: light)', color: '#f7f3ea' },
     { media: '(prefers-color-scheme: dark)', color: '#101214' },
   ],
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
 }
 
 export default function RootLayout({
@@ -57,6 +77,13 @@ export default function RootLayout({
       className={`${geist.variable} ${geistMono.variable} ${serif.variable}`}
       suppressHydrationWarning
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=localStorage.getItem('scout:palette');if(p&&['paper','sepia','mono','ocean','rose','forest'].indexOf(p)>-1){document.documentElement.setAttribute('data-palette',p)}else{document.documentElement.setAttribute('data-palette','paper')}}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className="font-sans antialiased bg-background text-foreground">
         <ThemeProvider
           attribute="class"
@@ -64,10 +91,12 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange={false}
         >
-          <AuthProvider>
-            {children}
-            <Toaster position="bottom-right" closeButton />
-          </AuthProvider>
+          <PaletteProvider>
+            <AuthProvider>
+              {children}
+              <Toaster position="bottom-right" closeButton />
+            </AuthProvider>
+          </PaletteProvider>
         </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

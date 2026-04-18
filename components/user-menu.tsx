@@ -13,7 +13,9 @@ import {
   Sun,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
+import { toast } from 'sonner'
 import { useAuth, initialsOf, type User } from '@/lib/auth'
+import { usePalette, PALETTES } from '@/lib/palette'
 import { cn } from '@/lib/utils'
 
 export function Avatar({
@@ -122,6 +124,7 @@ export function UserMenu() {
 
           <div className="border-t border-border p-2">
             <ThemeRow />
+            <PaletteRow />
           </div>
 
           <div className="border-t border-border p-1">
@@ -165,6 +168,46 @@ function MenuLink({
       <span className="text-muted-foreground">{icon}</span>
       {label}
     </Link>
+  )
+}
+
+function PaletteRow() {
+  const { palette, setPalette } = usePalette()
+  return (
+    <div className="flex items-center justify-between gap-2 px-2 pt-2 pb-1">
+      <span className="text-xs font-medium text-muted-foreground">Palette</span>
+      <div className="inline-flex items-center gap-1">
+        {PALETTES.map((p) => {
+          const active = palette === p.id
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => {
+                setPalette(p.id)
+                toast.success(`Palette: ${p.label}`)
+              }}
+              aria-label={p.label}
+              title={p.label}
+              className={cn(
+                'grid h-5 w-5 place-items-center rounded-full border transition-all',
+                active
+                  ? 'border-foreground scale-110 shadow-sm'
+                  : 'border-border hover:scale-105',
+              )}
+              style={{ background: p.swatch }}
+            >
+              {active && (
+                <span
+                  aria-hidden
+                  className="h-1.5 w-1.5 rounded-full bg-white mix-blend-difference"
+                />
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 

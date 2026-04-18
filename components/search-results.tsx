@@ -1,36 +1,42 @@
 'use client'
 
 import * as React from 'react'
+import Image from 'next/image'
 import {
   Bookmark as BookmarkIcon,
   BookmarkCheck,
-  Copy,
   ExternalLink,
-  Check,
+  ImageIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import type { ImageStripItem, SearchResult } from '@/lib/search-types'
 
-interface SearchResult {
-  title: string
-  url: string
-  description: string
-  displayUrl: string
-  favicon: string
-}
+export type { SearchResult, ImageStripItem }
 
 interface SearchResultsProps {
   results: SearchResult[]
   query: string
   onBookmark: (result: SearchResult) => void
   bookmarkedUrls?: Set<string>
+  imageStrip?: ImageStripItem[]
+  source?: 'demo' | 'bing' | 'google' | null
+  /** Specific image source: 'pexels' | 'unsplash' | 'bing' | 'google' | 'placeholder' */
+  imgSource?: string | null
+  highlightedIndex?: number
 }
+
+const BOOKMARK_HINT_KEY = 'scout:dismiss-bookmark-hint'
 
 export function SearchResults({
   results,
   query,
   onBookmark,
   bookmarkedUrls = new Set(),
+  imageStrip = [],
+  source = null,
+  imgSource = null,
+  highlightedIndex = -1,
 }: SearchResultsProps) {
   if (results.length === 0) {
     return (
@@ -61,56 +67,125 @@ export function SearchResults({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="mb-1 flex items-baseline justify-between px-1 text-xs text-muted-foreground">
-        <span>
-          About{' '}
-          <span className="font-semibold text-foreground">{results.length}</span>{' '}
-          results for{' '}
-          <span className="font-semibold text-foreground">
-            &ldquo;{query}&rdquo;
-          </span>
-        </span>
+    <div className="flex flex-col gap-5">
+      {imageStrip.length > 0 && (
+        <ImageStripRibbon items={imageStrip} query={query} imgSource={imgSource ?? source} />
+      )}
+
+      {/* Sources section */}
+      <div>
+        <div className="mb-3 flex items-center justify-between px-1">
+          <h2 className="font-serif text-[16px] text-foreground">Sources</h2>
+          <div className="flex items-center gap-1.5">
+            {source === 'demo' && (
+              <span className="rounded-full border border-dashed border-border bg-card px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                Demo
+              </span>
+            )}
+            {source && source !== 'demo' && (
+              <span className="rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                {source === 'brave'
+                  ? 'Brave'
+                  : source === 'serper'
+                    ? 'Google'
+                    : source === 'bing'
+                      ? 'Bing'
+                      : source === 'google'
+                        ? 'Google'
+                        : source === 'tavily'
+                          ? 'Tavily'
+                          : source}
+              </span>
+            )}
+            <span className="text-[12px] text-muted-foreground">{results.length} results</span>
+          </div>
+        </div>
+
+        {/* Compact source list */}
+        <div className="overflow-hidden rounded-2xl border border-border bg-[color:var(--paper-raised)]">
+          {results.map((result, index) => (
+            <SourceRow
+              key={`${result.url}-${index}`}
+              result={result}
+              index={index}
+              citationNumber={index + 1}
+              highlighted={highlightedIndex === index}
+              onBookmark={onBookmark}
+              isBookmarked={bookmarkedUrls.has(result.url)}
+              isLast={index === results.length - 1}
+            />
+          ))}
+        </div>
+
+        <BookmarkHintBanner />
       </div>
-      {results.map((result, index) => (
-        <ResultCard
-          key={`${result.url}-${index}`}
-          result={result}
-          index={index}
-          onBookmark={onBookmark}
-          isBookmarked={bookmarkedUrls.has(result.url)}
-        />
-      ))}
     </div>
   )
 }
 
-function ResultCard({
+function BookmarkHintBanner() {
+  const [hidden, setHidden] = React.useState(true)
+
+  React.useEffect(() => {
+    try {
+      setHidden(localStorage.getItem(BOOKMARK_HINT_KEY) === '1')
+    } catch {
+      setHidden(false)
+    }
+  }, [])
+
+  if (hidden) return null
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+      <p className="min-w-0 flex-1">
+        <span className="font-medium text-foreground">Bookmark any source</span>{' '}
+        — tap the bookmark icon on a row to save it to your left rail.
+      </p>
+      <button
+        type="button"
+        onClick={() => {
+          try {
+            localStorage.setItem(BOOKMARK_HINT_KEY, '1')
+          } catch {
+            // ignore
+          }
+          setHidden(true)
+        }}
+        className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.12em] underline-offset-4 hover:underline"
+      >
+        Got it
+      </button>
+    </div>
+  )
+}
+
+function SourceRow({
   result,
   index,
+  citationNumber,
+  highlighted,
   onBookmark,
   isBookmarked,
+  isLast,
 }: {
   result: SearchResult
   index: number
+  citationNumber: number
+  highlighted: boolean
   onBookmark: (r: SearchResult) => void
   isBookmarked: boolean
+  isLast: boolean
 }) {
-  const [copied, setCopied] = React.useState(false)
-  const [imgFailed, setImgFailed] = React.useState(false)
+  const [favFailed, setFavFailed] = React.useState(false)
 
-  const handleCopy = async (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
+  const host = React.useMemo(() => {
     try {
-      await navigator.clipboard.writeText(result.url)
-      setCopied(true)
-      toast.success('Link copied')
-      setTimeout(() => setCopied(false), 1400)
+      return new URL(result.url).hostname.replace(/^www\./, '')
     } catch {
-      toast.error('Could not copy link')
+      return result.displayUrl
     }
-  }
+  }, [result.url, result.displayUrl])
 
   const handleBookmark = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -122,164 +197,210 @@ function ResultCard({
     onBookmark(result)
   }
 
-  const breadcrumb = React.useMemo(() => {
-    try {
-      const u = new URL(result.url)
-      const segments = u.pathname.split('/').filter(Boolean).slice(0, 3)
-      return [u.hostname.replace(/^www\./, ''), ...segments]
-    } catch {
-      return [result.displayUrl]
-    }
-  }, [result.url, result.displayUrl])
-
   return (
     <a
       href={result.url}
       target="_blank"
       rel="noopener noreferrer"
+      data-citation={String(citationNumber)}
+      data-result-index={index}
       className={cn(
-        'group relative block overflow-hidden rounded-xl border border-border bg-[color:var(--paper-raised)] p-5',
-        'transition-all duration-200 hover:-translate-y-[1px] hover:border-foreground/30 hover:shadow-[0_14px_40px_-24px_rgba(0,0,0,0.25)]',
-        'reveal',
+        'group flex items-start gap-3 px-4 py-3.5 transition-colors hover:bg-muted/40',
+        !isLast && 'border-b border-border',
+        highlighted && 'bg-[color:var(--accent-green)]/5 ring-2 ring-inset ring-[color:var(--accent-green)]/30',
       )}
-      style={{ transitionDelay: `${Math.min(index * 40, 400)}ms` }}
-      ref={(el) => {
-        if (!el || typeof IntersectionObserver === 'undefined') return
-        const obs = new IntersectionObserver(
-          (entries) => {
-            for (const entry of entries) {
-              if (entry.isIntersecting) {
-                entry.target.classList.add('is-visible')
-                obs.unobserve(entry.target)
-              }
-            }
-          },
-          { rootMargin: '0px 0px -5% 0px', threshold: 0.1 },
-        )
-        obs.observe(el)
-      }}
     >
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-card overflow-hidden">
-          {!imgFailed && result.favicon ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={result.favicon}
-              alt=""
-              width={18}
-              height={18}
-              className="h-[18px] w-[18px]"
-              onError={() => setImgFailed(true)}
-            />
-          ) : (
-            <span className="text-[10px] font-bold text-muted-foreground">
-              {result.displayUrl?.[0]?.toUpperCase() || '?'}
-            </span>
+      {/* Citation number */}
+      <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded bg-muted/80 font-mono text-[10px] font-bold text-muted-foreground group-hover:bg-[color:var(--accent-green)]/10 group-hover:text-[color:var(--accent-green)]">
+        {citationNumber}
+      </span>
+
+      {/* Favicon */}
+      <div className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center overflow-hidden rounded-sm bg-muted/50">
+        {!favFailed ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={result.favicon}
+            alt=""
+            width={16}
+            height={16}
+            className="h-4 w-4"
+            onError={() => setFavFailed(true)}
+          />
+        ) : (
+          <span className="text-[10px] font-bold text-muted-foreground">
+            {host[0]?.toUpperCase()}
+          </span>
+        )}
+      </div>
+
+      {/* Content */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="truncate text-[12px] text-muted-foreground">{host}</p>
+        </div>
+        <h3 className="mt-0.5 line-clamp-1 text-[14px] font-semibold leading-snug text-foreground group-hover:text-[color:var(--accent-green)]">
+          {result.title}
+        </h3>
+        <p className="mt-0.5 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
+          {result.description}
+        </p>
+      </div>
+
+      {/* Thumb */}
+      {result.image && (
+        <div className="relative mt-0.5 hidden h-14 w-20 shrink-0 overflow-hidden rounded-lg bg-muted md:block">
+          <Image
+            src={result.image}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="80px"
+            unoptimized
+          />
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="mt-0.5 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            window.open(result.url, '_blank', 'noopener,noreferrer')
+          }}
+          aria-label="Open in new tab"
+          className="grid h-7 w-7 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={handleBookmark}
+          aria-label={isBookmarked ? 'Bookmarked' : 'Bookmark'}
+          className={cn(
+            'grid h-7 w-7 place-items-center rounded-lg transition-colors',
+            isBookmarked
+              ? 'bg-[color:var(--ink)] text-[color:var(--paper)]'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground',
           )}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-1 text-[11px] text-muted-foreground">
-            {breadcrumb.map((seg, i) => (
-              <React.Fragment key={i}>
-                <span className="truncate max-w-[180px]">{seg}</span>
-                {i < breadcrumb.length - 1 && (
-                  <span className="opacity-50">›</span>
-                )}
-              </React.Fragment>
-            ))}
-          </div>
-          <h3 className="mt-0.5 line-clamp-2 text-[17px] font-semibold text-foreground group-hover:text-[color:var(--accent-green)] transition-colors">
-            {result.title}
-          </h3>
-          <p className="mt-1 line-clamp-2 text-[14px] leading-relaxed text-muted-foreground">
-            {result.description}
-          </p>
-        </div>
-
-        <div className="ml-2 flex shrink-0 items-center gap-1 opacity-70 transition-opacity group-hover:opacity-100">
-          <IconButton label="Copy link" onClick={handleCopy}>
-            {copied ? (
-              <Check className="h-4 w-4 text-[color:var(--accent-green)]" />
-            ) : (
-              <Copy className="h-4 w-4" />
-            )}
-          </IconButton>
-          <IconButton
-            label="Open in new tab"
-            onClick={(e) => {
-              e.preventDefault()
-              window.open(result.url, '_blank', 'noopener,noreferrer')
-            }}
-          >
-            <ExternalLink className="h-4 w-4" />
-          </IconButton>
-          <IconButton
-            label={isBookmarked ? 'Bookmarked' : 'Save bookmark'}
-            onClick={handleBookmark}
-            active={isBookmarked}
-          >
-            {isBookmarked ? (
-              <BookmarkCheck className="h-4 w-4" />
-            ) : (
-              <BookmarkIcon className="h-4 w-4" />
-            )}
-          </IconButton>
-        </div>
+        >
+          {isBookmarked ? (
+            <BookmarkCheck className="h-3.5 w-3.5" />
+          ) : (
+            <BookmarkIcon className="h-3.5 w-3.5" />
+          )}
+        </button>
       </div>
     </a>
   )
 }
 
-function IconButton({
-  children,
-  label,
-  onClick,
-  active,
+const IMG_SOURCE_LABELS: Record<string, { label: string; dashed: boolean }> = {
+  pexels: { label: 'Pexels', dashed: false },
+  unsplash: { label: 'Unsplash', dashed: false },
+  bing: { label: 'Bing Images', dashed: false },
+  google: { label: 'Google Images', dashed: false },
+  placeholder: { label: 'Demo', dashed: true },
+  demo: { label: 'Demo', dashed: true },
+}
+
+function ImageStripRibbon({
+  items,
+  query,
+  imgSource,
 }: {
-  children: React.ReactNode
-  label: string
-  onClick: (e: React.MouseEvent) => void
-  active?: boolean
+  items: ImageStripItem[]
+  query: string
+  imgSource: string | null
 }) {
+  const badge = imgSource ? IMG_SOURCE_LABELS[imgSource] : null
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className={cn(
-        'grid h-8 w-8 place-items-center rounded-md transition-colors',
-        active
-          ? 'bg-[color:var(--ink)] text-[color:var(--paper)]'
-          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-      )}
-    >
-      {children}
-    </button>
+    <div className="rounded-2xl border border-border bg-[color:var(--paper-raised)] p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[color:var(--ink)] text-[color:var(--paper)]">
+            <ImageIcon className="h-3.5 w-3.5" />
+          </span>
+          <p className="font-serif text-sm text-foreground">
+            Images for &ldquo;{query}&rdquo;
+          </p>
+        </div>
+        {badge && (
+          <span className={cn(
+            'shrink-0 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground',
+            badge.dashed ? 'border-dashed border-border bg-card' : 'border-border bg-muted/60',
+          )}>
+            {badge.label}
+          </span>
+        )}
+      </div>
+      <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto pb-1">
+        {items.map((hit, i) => (
+          <a
+            key={`${hit.url}-${i}`}
+            href={hit.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group relative w-[112px] shrink-0 overflow-hidden rounded-xl border border-border bg-muted/40 transition-transform hover:scale-[1.03] hover:shadow-lg"
+          >
+            <div className="relative aspect-[4/3] w-full">
+              <Image
+                src={hit.thumbnail}
+                alt=""
+                fill
+                className="object-cover transition duration-300 group-hover:brightness-95"
+                sizes="112px"
+                unoptimized
+              />
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1.5 pt-6">
+                <p className="line-clamp-2 text-[10px] font-medium leading-tight text-white">
+                  {hit.title}
+                </p>
+                <p className="truncate text-[9px] text-white/75">{hit.source}</p>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
   )
 }
 
-export function SearchResultsSkeleton({ count = 5 }: { count?: number }) {
+export function SearchResultsSkeleton({ count = 8 }: { count?: number }) {
   return (
-    <div className="flex flex-col gap-3">
-      {Array.from({ length: count }).map((_, i) => (
-        <div
-          key={i}
-          className="rounded-xl border border-border bg-[color:var(--paper-raised)] p-5"
-          style={{ animationDelay: `${i * 50}ms` }}
-        >
-          <div className="flex gap-3">
-            <div className="h-8 w-8 shrink-0 rounded-md bg-muted" />
-            <div className="flex-1 space-y-2">
-              <div className="h-3 w-32 rounded bg-muted" />
-              <div className="h-4 w-3/4 rounded bg-muted/90" />
-              <div className="h-3 w-full rounded bg-muted/70" />
-              <div className="h-3 w-5/6 rounded bg-muted/70" />
+    <div className="flex flex-col gap-5">
+      {/* Image strip skeleton */}
+      <div className="rounded-2xl border border-border bg-[color:var(--paper-raised)] p-4">
+        <div className="mb-3 h-4 w-40 animate-pulse rounded bg-muted" />
+        <div className="flex gap-2 overflow-hidden">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-24 w-28 shrink-0 animate-pulse rounded-xl bg-muted" />
+          ))}
+        </div>
+      </div>
+      {/* Compact source rows skeleton */}
+      <div className="overflow-hidden rounded-2xl border border-border bg-[color:var(--paper-raised)]">
+        {Array.from({ length: count }).map((_, i) => (
+          <div
+            key={i}
+            className={cn(
+              'flex items-start gap-3 px-4 py-3.5',
+              i < count - 1 && 'border-b border-border',
+            )}
+          >
+            <div className="mt-0.5 h-5 w-5 animate-pulse rounded bg-muted" />
+            <div className="mt-0.5 h-5 w-5 animate-pulse rounded bg-muted" />
+            <div className="flex-1 space-y-1.5">
+              <div className="h-3 w-24 animate-pulse rounded bg-muted/60" />
+              <div className="h-4 w-[80%] animate-pulse rounded bg-muted/90" />
+              <div className="h-3 w-full animate-pulse rounded bg-muted/60" />
             </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }

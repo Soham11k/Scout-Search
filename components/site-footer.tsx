@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { Logo } from '@/components/logo'
 
 export function SiteFooter() {
-  const year = new Date().getFullYear()
   return (
     <footer className="border-t border-border mt-24 bg-[color:var(--paper-raised)]">
       <div className="container-editorial grid gap-10 py-14 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
@@ -48,7 +47,7 @@ export function SiteFooter() {
       <div className="border-t border-border">
         <div className="container-editorial flex flex-col gap-2 py-6 md:flex-row md:items-center md:justify-between">
           <p className="text-xs text-muted-foreground">
-            © {year} Scout Labs · Made for humans.
+            © 2026 Scout Labs · Made for humans.
           </p>
           <p className="font-serif italic text-sm text-muted-foreground">
             “Small tools, made carefully.”

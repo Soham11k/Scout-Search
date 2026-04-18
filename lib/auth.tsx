@@ -1,6 +1,8 @@
 'use client'
 
 import * as React from 'react'
+import type { User as SupabaseAuthUser } from '@supabase/supabase-js'
+import { getSupabaseBrowserClient } from '@/lib/supabase/browser'
 
 export type User = {
   id: string
@@ -10,24 +12,37 @@ export type User = {
   createdAt: string
 }
 
-type StoredUser = User & { passwordHash: string }
-
 type AuthState = {
   user: User | null
   status: 'loading' | 'authenticated' | 'unauthenticated'
+  /** True when Supabase env is present — sessions are cookie-based and server-verified */
+  mode: 'supabase' | 'local'
 }
 
 type AuthContextValue = AuthState & {
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (input: { name: string; email: string; password: string }) => Promise<void>
-  signOut: () => void
+  signUp: (input: {
+    name: string
+    email: string
+    password: string
+  }) => Promise<void>
+  signOut: () => Promise<void>
 }
 
 const USERS_KEY = 'scout:users'
 const SESSION_KEY = 'scout:session'
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30 // 30 days
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30
 
 const AuthContext = React.createContext<AuthContextValue | null>(null)
+
+function useHasSupabase() {
+  return (
+    typeof process.env.NEXT_PUBLIC_SUPABASE_URL === 'string' &&
+    process.env.NEXT_PUBLIC_SUPABASE_URL.length > 0 &&
+    typeof process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY === 'string' &&
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length > 0
+  )
+}
 
 async function sha256(text: string) {
   const buf = new TextEncoder().encode(text)
@@ -36,6 +51,8 @@ async function sha256(text: string) {
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
 }
+
+type StoredUser = User & { passwordHash: string }
 
 function readUsers(): Record<string, StoredUser> {
   if (typeof window === 'undefined') return {}
@@ -74,6 +91,22 @@ function hueFromEmail(email: string) {
   return h % 360
 }
 
+function mapSupabaseUser(u: SupabaseAuthUser): User {
+  const meta = u.user_metadata as Record<string, unknown> | undefined
+  const name =
+    (typeof meta?.full_name === 'string' && meta.full_name) ||
+    (typeof meta?.name === 'string' && meta.name) ||
+    u.email?.split('@')[0] ||
+    'User'
+  return {
+    id: u.id,
+    email: u.email || '',
+    name,
+    avatarHue: hueFromEmail(u.email || ''),
+    createdAt: u.created_at || new Date().toISOString(),
+  }
+}
+
 function stripPassword(u: StoredUser): User {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { passwordHash, ...rest } = u
@@ -81,26 +114,59 @@ function stripPassword(u: StoredUser): User {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const hasSupabase = useHasSupabase()
   const [state, setState] = React.useState<AuthState>({
     user: null,
     status: 'loading',
+    mode: hasSupabase ? 'supabase' : 'local',
   })
 
   React.useEffect(() => {
+    const supabase = getSupabaseBrowserClient()
+    if (hasSupabase && supabase) {
+      void supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          setState({
+            user: mapSupabaseUser(session.user),
+            status: 'authenticated',
+            mode: 'supabase',
+          })
+        } else {
+          setState({ user: null, status: 'unauthenticated', mode: 'supabase' })
+        }
+      })
+
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) {
+          setState({
+            user: mapSupabaseUser(session.user),
+            status: 'authenticated',
+            mode: 'supabase',
+          })
+        } else {
+          setState({ user: null, status: 'unauthenticated', mode: 'supabase' })
+        }
+      })
+
+      return () => subscription.unsubscribe()
+    }
+
     const session = readSession()
     if (!session) {
-      setState({ user: null, status: 'unauthenticated' })
+      setState({ user: null, status: 'unauthenticated', mode: 'local' })
       return
     }
     const users = readUsers()
     const stored = Object.values(users).find((u) => u.id === session.userId)
     if (!stored) {
       localStorage.removeItem(SESSION_KEY)
-      setState({ user: null, status: 'unauthenticated' })
+      setState({ user: null, status: 'unauthenticated', mode: 'local' })
       return
     }
-    setState({ user: stripPassword(stored), status: 'authenticated' })
-  }, [])
+    setState({ user: stripPassword(stored), status: 'authenticated', mode: 'local' })
+  }, [hasSupabase])
 
   const signIn = React.useCallback(
     async (email: string, password: string) => {
@@ -108,6 +174,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!normalizedEmail || !password) {
         throw new Error('Please enter your email and password.')
       }
+
+      const supabase = getSupabaseBrowserClient()
+      if (hasSupabase && supabase) {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        })
+        if (error) throw new Error(error.message)
+        return
+      }
+
       const users = readUsers()
       const stored = users[normalizedEmail]
       if (!stored) throw new Error('No account found for that email.')
@@ -122,9 +199,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           expiresAt: Date.now() + SESSION_TTL_MS,
         }),
       )
-      setState({ user: stripPassword(stored), status: 'authenticated' })
+      setState({ user: stripPassword(stored), status: 'authenticated', mode: 'local' })
     },
-    [],
+    [hasSupabase],
   )
 
   const signUp = React.useCallback(
@@ -144,6 +221,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Please enter a valid email.')
       if (password.length < 6)
         throw new Error('Password must be at least 6 characters.')
+
+      const supabase = getSupabaseBrowserClient()
+      if (hasSupabase && supabase) {
+        const { data, error } = await supabase.auth.signUp({
+          email: normalizedEmail,
+          password,
+          options: {
+            data: { full_name: normalizedName },
+          },
+        })
+        if (error) throw new Error(error.message)
+        if (data.user && !data.session) {
+          throw new Error(
+            'Account created — check your email to confirm, then sign in.',
+          )
+        }
+        return
+      }
 
       const users = readUsers()
       if (users[normalizedEmail])
@@ -170,15 +265,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           expiresAt: Date.now() + SESSION_TTL_MS,
         }),
       )
-      setState({ user: stripPassword(user), status: 'authenticated' })
+      setState({ user: stripPassword(user), status: 'authenticated', mode: 'local' })
     },
-    [],
+    [hasSupabase],
   )
 
-  const signOut = React.useCallback(() => {
+  const signOut = React.useCallback(async () => {
+    const supabase = getSupabaseBrowserClient()
+    if (hasSupabase && supabase) {
+      await supabase.auth.signOut()
+      setState({ user: null, status: 'unauthenticated', mode: 'supabase' })
+      return
+    }
     localStorage.removeItem(SESSION_KEY)
-    setState({ user: null, status: 'unauthenticated' })
-  }, [])
+    setState({ user: null, status: 'unauthenticated', mode: 'local' })
+  }, [hasSupabase])
 
   const value = React.useMemo<AuthContextValue>(
     () => ({ ...state, signIn, signUp, signOut }),

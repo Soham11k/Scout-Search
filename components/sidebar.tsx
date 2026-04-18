@@ -93,7 +93,7 @@ export function Sidebar({
       <aside
         className={cn(
           'fixed top-16 bottom-0 left-0 z-40 w-80 overflow-hidden transition-transform duration-300 ease-out',
-          'border-r border-border bg-sidebar text-sidebar-foreground',
+          'border-r border-sidebar-border bg-gradient-to-b from-sidebar via-sidebar to-[color-mix(in_oklab,var(--sidebar)_92%,var(--background))] text-sidebar-foreground shadow-[inset_-1px_0_0_0_var(--sidebar-border)]',
           isOpen ? 'translate-x-0' : '-translate-x-full',
           'lg:translate-x-0',
         )}

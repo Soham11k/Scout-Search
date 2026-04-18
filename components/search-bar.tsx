@@ -123,6 +123,7 @@ export function SearchBar({
           )}
         />
         <input
+          id="scout-search"
           ref={inputRef}
           type="text"
           autoFocus={autoFocus}

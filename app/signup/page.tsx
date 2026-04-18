@@ -65,7 +65,16 @@ export default function SignupPage() {
       })
       router.push('/app')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
+      const msg = err instanceof Error ? err.message : 'Something went wrong'
+      if (
+        msg.toLowerCase().includes('check your email') ||
+        msg.toLowerCase().includes('confirm')
+      ) {
+        toast.success('Confirm your email', { description: msg })
+        router.push('/login')
+        return
+      }
+      setError(msg)
     } finally {
       setLoading(false)
     }
